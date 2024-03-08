@@ -20,6 +20,9 @@ using static AForge.Math.FourierTransform;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using WPF_MachineService.Models;
+using Microsoft.EntityFrameworkCore;
+using WPF_MachineService.Repository;
 namespace WPF_MachineService
 {
     /// <summary>
@@ -27,16 +30,20 @@ namespace WPF_MachineService
     /// </summary>
     public partial class MainWindow : Window
     {
-        private FilterInfoCollection? _filterInfoCollectionVideoDevices; 
+        private readonly WpfMachineContext context;
+        public UnitOfWork unitOfWork = new UnitOfWork();
+        private FilterInfoCollection? _filterInfoCollectionVideoDevices;
         private VideoCaptureDevice[]? _videoCaptureDeviceSources;
         private int selectedCameraIndex = 0;
         private int captureCount = 1;
+        private bool IsScanning = true;
         public MainWindow()
         {
+            context = new WpfMachineContext();
             InitializeComponent();
             Loaded += MachineWindow_Loaded;
             Closing += MachineWindow_Closing;
-          //  LoadDetectionData();
+
         }
 
         /// <summary>
@@ -168,7 +175,7 @@ namespace WPF_MachineService
                             {
                                 Bitmap capturedBitmap = HelpToBitMapImage(capturedBitmapSource);
                                 string subfolderName = DateTime.Now.ToString("yyyyMMdd");
-                                string subfolderPath = System.IO.Path.Combine("C:\\Users\\longn\\source\\repos\\WPF_MachineService\\SavePic", subfolderName);
+                                string subfolderPath = System.IO.Path.Combine("D:\\Dev\\BE\\WPF\\Wpf_projects\\SavePic", subfolderName);
 
                                 if (!Directory.Exists(subfolderPath))
                                 {
@@ -199,7 +206,7 @@ namespace WPF_MachineService
                                 string fileName = $"capture_{DateTime.Now:HHmmss}.png";
 
                                 string filePath = System.IO.Path.Combine(folderPath, fileName);
-                                string filePathPython = System.IO.Path.Combine("C:\\ultralytics\\yolov8-silva\\inference\\images", fileName);
+                                string filePathPython = System.IO.Path.Combine("C:\\Yolov8\\ultralytics\\yolov8-silva\\inference\\images", fileName);
                                 LoadDetectionData();
                                 try
                                 {
@@ -236,41 +243,222 @@ namespace WPF_MachineService
 
         private async void LoadDetectionData()
         {
-            string detectjsonFilePath = @"C:\Users\longn\source\repos\WPF_MachineService\WPF_MachineService\WPF_MachineService\Detection_results.json";
-
-
+            string detectjsonFilePath = @"D:\Dev\BE\WPF\Wpf_projects\WPF_MachineService\WPF_MachineService\Detection_results.json";
+            Scanning messageBox = new Scanning();
+            Window window = new Window
+            {
+                Content = messageBox,
+                SizeToContent = SizeToContent.WidthAndHeight,
+                WindowStyle = WindowStyle.None,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterScreen,
+                Title = "Scanning"
+            };
+            window.Show();
+            await Task.Delay(2000);
             if (File.Exists(detectjsonFilePath))
             {
-                try
+                List<Detection> productsFromJson;
+                using (StreamReader r = new StreamReader(detectjsonFilePath))
                 {
-                 
-                    List<Detection> productsFromJson;
-                    using (StreamReader r = new StreamReader(detectjsonFilePath))
+                    string json = r.ReadToEnd();
+                    productsFromJson = JsonConvert.DeserializeObject<List<Detection>>(json);
+                }
+                Dictionary<string, int> productNameCounts = new Dictionary<string, int>();
+                foreach (var detection in productsFromJson)
+                {
+                    if (productNameCounts.ContainsKey(detection.name))
                     {
-                        string json = r.ReadToEnd();
-                        productsFromJson = JsonConvert.DeserializeObject<List<Detection>>(json);
+                        productNameCounts[detection.name]++;
                     }
-                   
-                    List<string> productNames = new List<string>();
-                    foreach (var detection in productsFromJson)
+                    else
                     {
-                        productNames.Add(detection.name);
+                        productNameCounts[detection.name] = 1;
                     }
+                }
+                List<Product> productsToDisplay = new List<Product>();
+                var allProductsFromDb = context.Products.ToList();
+                foreach (var productDb in allProductsFromDb)
+                {
+                    if (productNameCounts.ContainsKey(productDb.ProductName))
+                    {
+                        productDb.Quantity = productNameCounts[productDb.ProductName];
+                        productDb.Price = productDb.Quantity * productDb.Price;
+                        productsToDisplay.Add(productDb);
+                    };
+                }
 
-                    lvListView.ItemsSource = productNames;
-                }
-                catch (JsonException ex)
-                {
-                    MessageBox.Show("Error reading JSON file: " + ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
+                lvListView.ItemsSource = productsToDisplay;
+                lvListView.DataContext = this;
+                CalculateTotalPrice();
+                IsScanning = false;
             }
             else
             {
-                MessageBox.Show("File not found: " + detectjsonFilePath, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show("File not found: " + detectjsonFilePath);
+            }
+            window.Close();
+        }
+        private void CalculateTotalPrice()
+        {
+            double totalPrice = 0;
+            foreach (var item in lvListView.Items)
+            {
+                if (item is Product product)
+                {
+                    totalPrice += product.Quantity * product.Price;
+                }
+            }
+            tbSumTotal.Text = totalPrice.ToString();
+        }
+
+        private void ResultTotolPrice(object sender, TextChangedEventArgs e)
+        {
+            CalculateTotalPrice();
+        }
+        private async void btPayment(object sender, RoutedEventArgs e)
+        {
+            string Phone = "0333888257";
+            string Name = "Đỗ Hữu Thuận";
+            string Email = "dohuuthuan.bhdn@gmail.com";
+            string PayNumber = tbSumTotal.Text.Trim();
+            string Datetimes = DateTime.Now.ToString("dd/MM/yyyy");
+
+            if (lvListView.ItemsSource is IEnumerable<Product> products)
+            {
+                foreach (var selectedProduct in products)
+                {
+                    string productName = selectedProduct.ProductName;
+                    string Description = $"Sản phẩm {productName} + Giá tiền {PayNumber} + {Datetimes}";
+                    MomoQRCodeGenerator momoGenerator = new MomoQRCodeGenerator();
+                    string merchantCode = $"2|99|{Phone}|{Name}|{Email}|0|0|{PayNumber}|{Description}";
+                    Bitmap momoQRCode = momoGenerator.GenerateMomoQRCode(merchantCode);
+                    Bitmap resizedLogo = ResizeImage(Properties.Resources.logo, 50, 50);
+                    momoQRCode = AddLogoToQRCode(momoQRCode, resizedLogo);
+
+
+                    if (!string.IsNullOrWhiteSpace(tbSumTotal.Text))
+                    {
+                        ScanMoMoQR scanQR = new ScanMoMoQR();
+                        scanQR.UpdateQRCode(momoQRCode);
+                        double windowWidth = 500;
+                        double windowHeight = 500;
+                        Window qrCodeWindow = new Window
+                        {
+                            Content = scanQR,
+                            Width = windowWidth,
+                            Height = windowHeight,
+                            WindowStyle = WindowStyle.None,
+                            ResizeMode = ResizeMode.NoResize,
+                            WindowStartupLocation = WindowStartupLocation.CenterScreen,
+                            Title = "ScanQR"
+                        };
+                        qrCodeWindow.Show();
+                        await Task.Delay(60000);        // Check time 
+                        if (!ProcessPayment())
+                        {
+                            qrCodeWindow.Close();
+                            MessageBox.Show("QR code quá thời gian. Vui lòng thanh toán lại !!!", "Error", MessageBoxButton.OK);
+                        }
+                    }
+                    else
+                    {
+                        MessageBox.Show("Please enter a valid total price.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                }
+            }
+
+        }
+        private Bitmap ResizeImage(Bitmap image, int maxWidth, int maxHeight)
+        {
+            double ratioX = (double)maxWidth / image.Width;
+            double ratioY = (double)maxHeight / image.Height;
+            double ratio = Math.Min(ratioX, ratioY);
+
+            int newWidth = (int)(image.Width * ratio);
+            int newHeight = (int)(image.Height * ratio);
+
+            Bitmap newImage = new Bitmap(newWidth, newHeight);
+            Graphics g = Graphics.FromImage(newImage);
+            g.DrawImage(image, 0, 0, newWidth, newHeight);
+            return newImage;
+        }
+        private Bitmap AddLogoToQRCode(Bitmap qrCode, Bitmap logo)
+        {
+            int xPos = (qrCode.Width - logo.Width) / 2;
+            int yPos = (qrCode.Height - logo.Height) / 2;
+            using (Graphics g = Graphics.FromImage(qrCode))
+            {
+                g.DrawImage(logo, new System.Drawing.Point(xPos, yPos));
+            }
+            return qrCode;
+        }
+        private bool ProcessPayment()
+        {
+            bool paymentSuccess = false;
+
+
+            return paymentSuccess;
+        }
+        private void btConfirmOrder(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                Models.Order newOrder = new Models.Order
+                {
+                    PaymentId = 1,
+                    Total = Convert.ToDouble(tbSumTotal.Text),
+                    Quantity = 1,
+                    DateCreated = DateOnly.FromDateTime(DateTime.Now),
+
+            };
+
+                unitOfWork.OrderRepository.Insert(newOrder);
+                unitOfWork.Save();
+
+                if (lvListView.ItemsSource != null)
+                {
+                    foreach (var item in lvListView.ItemsSource)
+                    {
+                        if (item is Models.Product product)
+                        {
+                            // Kiểm tra xem product.Id có tồn tại trong bảng Product không
+                            var existingProduct = unitOfWork.ProductRepository.Get(p => p.ProductId== product.ProductId);
+                            if (existingProduct != null)
+                            {
+                                Models.OrderDetail orderDetail = new Models.OrderDetail
+                                {
+                                    ProductId = product.ProductId,
+                                    Price = product.Price,
+                                    Quantity = product.Quantity,
+                                    Status = "1",
+                                    OrderId = newOrder.OrderId,
+                                    
+                                };
+
+                                newOrder.OrderDetails.Add(orderDetail);
+                                newOrder.Total += product.Quantity * product.Price;
+                            }
+                            else
+                            {
+                                // Xử lý trường hợp product.Id không tồn tại trong bảng Product
+                                MessageBox.Show($"Sản phẩm với Id {product.ProductId} không tồn tại trong cơ sở dữ liệu.", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
+                                return; // Dừng quá trình lưu đơn hàng
+                            }
+                        }
+                    }
+                }
+
+                unitOfWork.Save();
+
+                MessageBox.Show("Đơn hàng đã được lưu thành công!", "Thông báo", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                // Xử lý lỗi nếu có
+                MessageBox.Show($"Đã xảy ra lỗi: {ex.Message}", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
+
     }
-
-
-    
 }
