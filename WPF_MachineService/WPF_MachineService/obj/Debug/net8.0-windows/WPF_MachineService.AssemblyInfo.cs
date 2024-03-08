@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("WPF_MachineService")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b52bc2f923dc0643ce54daa1944e4361d7c7c877")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
 [assembly: System.Reflection.AssemblyProductAttribute("WPF_MachineService")]
 [assembly: System.Reflection.AssemblyTitleAttribute("WPF_MachineService")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
