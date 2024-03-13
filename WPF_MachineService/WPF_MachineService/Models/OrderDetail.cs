@@ -15,7 +15,7 @@ public partial class OrderDetail
 
     public string? Status { get; set; }
 
-    public DateOnly? CreationDate { get; set; }
+    public DateTime? CreationDate { get; set; }
 
     public int? Quantity { get; set; }
 

@@ -1,15 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using WPF_MachineService.Models;
+﻿using WPF_MachineService.Models;
 
 namespace WPF_MachineService.Repository
 {
     public class UnitOfWork : IDisposable
     {
-        private WpfMachineContext context = new WpfMachineContext();
+        private ScanMachineContext context = new ScanMachineContext();
 
         private GenericRepository<Category> categoryRepository;
 
