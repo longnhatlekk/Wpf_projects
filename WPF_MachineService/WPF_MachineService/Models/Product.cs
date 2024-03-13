@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace WPF_MachineService.Models;
+﻿namespace WPF_MachineService.Models;
 
 public partial class Product
 {
@@ -15,7 +12,7 @@ public partial class Product
 
     public string? Description { get; set; }
 
-    public DateOnly? ExpirationDate { get; set; }
+    public DateTime? ExpirationDate { get; set; }
 
     public bool? Status { get; set; }
 

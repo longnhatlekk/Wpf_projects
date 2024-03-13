@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace WPF_MachineService.Models;
+﻿namespace WPF_MachineService.Models;
 
 public partial class Order
 {
@@ -13,7 +10,7 @@ public partial class Order
 
     public int? Quantity { get; set; }
 
-    public DateOnly? DateCreated { get; set; }
+    public DateTime DateCreated { get; set; }
 
     public virtual ICollection<OrderDetail> OrderDetails { get; set; } = new List<OrderDetail>();
 

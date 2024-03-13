@@ -1,28 +1,13 @@
 ﻿using AForge.Video.DirectShow;
-using AForge.Video;
-using AForge.Imaging;
-using System.Text;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
-using System.Windows.Media.Media3D;
+using Newtonsoft.Json;
 using System.Drawing;
 using System.IO;
-using Newtonsoft.Json;
-using WPF_MachineService.Service;
-using static AForge.Math.FourierTransform;
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media.Imaging;
 using WPF_MachineService.Models;
-using Microsoft.EntityFrameworkCore;
 using WPF_MachineService.Repository;
+using WPF_MachineService.Service;
 namespace WPF_MachineService
 {
     /// <summary>
@@ -30,7 +15,7 @@ namespace WPF_MachineService
     /// </summary>
     public partial class MainWindow : Window
     {
-        private readonly WpfMachineContext context;
+        private readonly ScanMachineContext context;
         public UnitOfWork unitOfWork = new UnitOfWork();
         private FilterInfoCollection? _filterInfoCollectionVideoDevices;
         private VideoCaptureDevice[]? _videoCaptureDeviceSources;
@@ -39,7 +24,7 @@ namespace WPF_MachineService
         private bool IsScanning = true;
         public MainWindow()
         {
-            context = new WpfMachineContext();
+            context = new ScanMachineContext();
             InitializeComponent();
             Loaded += MachineWindow_Loaded;
             Closing += MachineWindow_Closing;
@@ -206,7 +191,7 @@ namespace WPF_MachineService
                                 string fileName = $"capture_{DateTime.Now:HHmmss}.png";
 
                                 string filePath = System.IO.Path.Combine(folderPath, fileName);
-                                string filePathPython = System.IO.Path.Combine("C:\\Yolov8\\ultralytics\\yolov8-silva\\inference\\images", fileName);
+                                string filePathPython = System.IO.Path.Combine("C:\\ultralytics\\yolov8-silva\\inference\\images", fileName);
                                 LoadDetectionData();
                                 try
                                 {
@@ -243,7 +228,7 @@ namespace WPF_MachineService
 
         private async void LoadDetectionData()
         {
-            string detectjsonFilePath = @"D:\Dev\BE\WPF\Wpf_projects\WPF_MachineService\WPF_MachineService\Detection_results.json";
+            string detectjsonFilePath = @"D:\Materials\SWD\Code\ScanMachine_SWD\WPF_MachineService\WPF_MachineService\WPF_MachineService\Detection_results.json";
             Scanning messageBox = new Scanning();
             Window window = new Window
             {
@@ -318,9 +303,9 @@ namespace WPF_MachineService
         }
         private async void btPayment(object sender, RoutedEventArgs e)
         {
-            string Phone = "0333888257";
-            string Name = "Đỗ Hữu Thuận";
-            string Email = "dohuuthuan.bhdn@gmail.com";
+            string Phone = "0708125538";
+            string Name = "Nguyễn Gia Đạt";
+            string Email = "dat36226@gmail.com";
             string PayNumber = tbSumTotal.Text.Trim();
             string Datetimes = DateTime.Now.ToString("dd/MM/yyyy");
 
@@ -409,12 +394,12 @@ namespace WPF_MachineService
                     PaymentId = 1,
                     Total = Convert.ToDouble(tbSumTotal.Text),
                     Quantity = 1,
-                    DateCreated = DateOnly.FromDateTime(DateTime.Now),
+                    DateCreated = DateTime.Now,
 
-            };
+                };
 
                 unitOfWork.OrderRepository.Insert(newOrder);
-                unitOfWork.Save();
+                //unitOfWork.Save();
 
                 if (lvListView.ItemsSource != null)
                 {
@@ -423,17 +408,17 @@ namespace WPF_MachineService
                         if (item is Models.Product product)
                         {
                             // Kiểm tra xem product.Id có tồn tại trong bảng Product không
-                            var existingProduct = unitOfWork.ProductRepository.Get(p => p.ProductId== product.ProductId);
+                            var existingProduct = unitOfWork.ProductRepository.Get(p => p.ProductId == product.ProductId);
                             if (existingProduct != null)
                             {
                                 Models.OrderDetail orderDetail = new Models.OrderDetail
                                 {
+                                    OrderId = newOrder.OrderId,
+
                                     ProductId = product.ProductId,
                                     Price = product.Price,
                                     Quantity = product.Quantity,
                                     Status = "1",
-                                    OrderId = newOrder.OrderId,
-                                    
                                 };
 
                                 newOrder.OrderDetails.Add(orderDetail);
@@ -459,6 +444,6 @@ namespace WPF_MachineService
                 MessageBox.Show($"Đã xảy ra lỗi: {ex.Message}", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
-
     }
+
 }

@@ -1,20 +1,15 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Linq.Expressions;
-using System.Text;
-using System.Threading.Tasks;
 using WPF_MachineService.Models;
 
 namespace WPF_MachineService.Repository
 {
     public class GenericRepository<TEntity> where TEntity : class
     {
-        internal WpfMachineContext context;
+        internal ScanMachineContext context;
         internal DbSet<TEntity> dbSet;
 
-        public GenericRepository(WpfMachineContext context)
+        public GenericRepository(ScanMachineContext context)
         {
             this.context = context;
             dbSet = context.Set<TEntity>();
