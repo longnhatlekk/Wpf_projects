@@ -60,6 +60,10 @@
               "target": "Package",
               "version": "[2.2.5, )"
             },
+            "FirebaseStorage.net": {
+              "target": "Package",
+              "version": "[1.0.3, )"
+            },
             "Microsoft.EntityFrameworkCore": {
               "target": "Package",
               "version": "[7.0.16, )"

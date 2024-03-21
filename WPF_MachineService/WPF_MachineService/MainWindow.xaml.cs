@@ -1,13 +1,17 @@
 ﻿using AForge.Video.DirectShow;
-using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System.Drawing;
 using System.IO;
+using System.Net;
+using System.Net.Http;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media.Imaging;
 using WPF_MachineService.Models;
 using WPF_MachineService.Repository;
 using WPF_MachineService.Service;
+
 namespace WPF_MachineService
 {
     /// <summary>
@@ -144,7 +148,179 @@ namespace WPF_MachineService
             }
             return bitmap;
         }
-        private void btTakePictureImage_Click(object sender, RoutedEventArgs eventArgs)
+
+
+        private async Task<string> SendImageToRoboflowAsync(string imagePath)
+        {
+            try
+            {
+                byte[] imageArray = System.IO.File.ReadAllBytes(imagePath);
+                string encoded = Convert.ToBase64String(imageArray);
+                byte[] data = Encoding.ASCII.GetBytes(encoded);
+                string API_KEY = "1A2At2BEDsUrYA7PRGVe"; // Your API Key
+                string MODEL_ENDPOINT = "scanmachine/1"; // Set model e ndpoint
+
+                // Construct the URL
+                string uploadURL =
+                        "https://detect.roboflow.com/" + MODEL_ENDPOINT + "?api_key=" + API_KEY
+                    + "&name=" + System.IO.Path.GetFileName(imagePath);
+
+                // Service Request Config
+                ServicePointManager.Expect100Continue = true;
+                ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+
+                // Configure Request
+                WebRequest request = WebRequest.Create(uploadURL);
+                request.Method = "POST";
+                request.ContentType = "application/x-www-form-urlencoded";
+                request.ContentLength = data.Length;
+
+                // Write Data
+                using (Stream stream = request.GetRequestStream())
+                {
+                    stream.Write(data, 0, data.Length);
+                }
+
+                // Get Response
+                string responseContent = null;
+                using (WebResponse response = request.GetResponse())
+                {
+                    using (Stream stream = response.GetResponseStream())
+                    {
+                        using (StreamReader sr99 = new StreamReader(stream))
+                        {
+                            responseContent = sr99.ReadToEnd();
+                        }
+                    }
+                }
+
+                return responseContent;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error sending image to Roboflow: {ex.Message}");
+                return null;
+            }
+        }
+
+        //private async void btTakePictureImage_Click(object sender, RoutedEventArgs e)
+        //{
+        //    try
+        //    {
+        //        // Capture bitmap from video source
+        //        BitmapSource capturedBitmapSource = (BitmapSource)imgVideo.Source;
+        //        if (capturedBitmapSource != null)
+        //        {
+        //            Bitmap capturedBitmap = HelpToBitMapImage(capturedBitmapSource);
+
+        //            // Save captured image to a folder
+        //            string folderPath = @"D:\Materials\SWD\Code\Scan\Wpf_projects\SavePic";
+        //            if (!Directory.Exists(folderPath))
+        //            {
+        //                Directory.CreateDirectory(folderPath);
+        //            }
+        //            string imagePath = Path.Combine(folderPath, $"capture_{DateTime.Now:HHmmss}.png");
+        //            capturedBitmap.Save(imagePath, System.Drawing.Imaging.ImageFormat.Png);
+
+        //            // Send captured image to Roboflow
+        //            string detectionResult = await SendImageToRoboflowAsync(imagePath);
+        //            if (detectionResult != null)
+        //            {
+        //                // Process detection result (if needed)
+        //                // You can display the result, parse it, or do any further processing here
+        //                MessageBox.Show("Object detection result: " + detectionResult);
+        //            }
+        //        }
+        //        else
+        //        {
+        //            MessageBox.Show("Bitmap source is null.");
+        //        }
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        MessageBox.Show($"Error capturing frame: {ex.Message}");
+        //    }
+        //}
+
+        private static async Task UploadFilesToFirebase(string folderPath)
+        {
+            try
+            {
+                var apiKey = "AIzaSyCpTV-rRSOQyN2UW9uzp2vms7PkwLbQhzM";
+                var firebaseStorageBaseUrl = "https://firebasestorage.googleapis.com/v0/b/posscan-55171.appspot.com/o";
+                string[] files = Directory.GetFiles(folderPath);
+
+                using (var client = new HttpClient())
+                {
+                    client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+                    foreach (var filePath in files)
+                    {
+                        string localFileName = System.IO.Path.GetFileName(filePath);
+                        var firebaseStorageUrl = $"{firebaseStorageBaseUrl}?uploadType=media&name=imgage/{localFileName}";
+                        byte[] fileBytes = File.ReadAllBytes(filePath);
+                        var content = new ByteArrayContent(fileBytes);
+                        var response = await client.PostAsync(firebaseStorageUrl, content);
+
+                        if (response.IsSuccessStatusCode)
+                        {
+                            var responseContent = await response.Content.ReadAsStringAsync();
+                            var jsonResponse = JObject.Parse(responseContent);
+                            var bucket = jsonResponse["bucket"]?.ToString();
+                            var name = jsonResponse["name"]?.ToString();
+
+                            if (bucket != null && name != null)
+                            {
+                                var url = $"https://firebasestorage.googleapis.com/v0/b/{bucket}/o/{Uri.EscapeDataString(name)}?alt=media";
+                                MessageBox.Show($"File {localFileName} uploaded successfully to Firebase Storage at {url}!");
+                            }
+                            else
+                            {
+                                MessageBox.Show($"File {localFileName} uploaded successfully to Firebase Storage, but could not retrieve URL.");
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error uploading files: {ex.Message}");
+            }
+        }
+
+
+
+        //private async Task UploadImageToFirebaseAsync(Bitmap capturedBitmap)
+        //{
+        //    try
+        //    {
+        //        // Convert Bitmap to byte array
+        //        using (MemoryStream stream = new MemoryStream())
+        //        {
+        //            capturedBitmap.Save(stream, ImageFormat.Png);
+        //            byte[] imageData = stream.ToArray();
+
+        //            // Initialize Firebase Storage
+        //            FirebaseStorage firebaseStorage = new FirebaseStorage("https://firebasestorage.googleapis.com/v0/b/posscan-55171.appspot.com/imgage");
+
+        //            // Set the path where you want to save the image in Firebase Storage
+        //            string imagePath = $"images/capture_{DateTime.Now:yyyyMMddHHmmss}.png";
+
+        //            // Upload the image to Firebase Storage
+        //            var task = firebaseStorage.Child(imagePath).PutAsync(stream);
+
+        //            // Wait for the upload task to complete
+        //            await task;
+
+        //            MessageBox.Show("Image uploaded to Firebase Storage successfully!");
+        //        }
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        MessageBox.Show($"Error uploading image to Firebase Storage: {ex.Message}");
+        //    }
+        //}
+
+        private async void btTakePictureImage_Click(object sender, RoutedEventArgs eventArgs)
         {
             try
             {
@@ -160,19 +336,11 @@ namespace WPF_MachineService
                             {
                                 Bitmap capturedBitmap = HelpToBitMapImage(capturedBitmapSource);
                                 string subfolderName = DateTime.Now.ToString("yyyyMMdd");
-                                string subfolderPath = System.IO.Path.Combine("D:\\Dev\\BE\\WPF\\Wpf_projects\\SavePic", subfolderName);
+                                string subfolderPath = System.IO.Path.Combine("D:\\Materials\\SWD\\Code\\Scan\\Wpf_projects\\SavePic", subfolderName);
 
                                 if (!Directory.Exists(subfolderPath))
                                 {
-                                    try
-                                    {
-                                        Directory.CreateDirectory(subfolderPath);
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        System.Windows.MessageBox.Show($"Error creating subfolder: {ex.Message}");
-                                        return;
-                                    }
+                                    Directory.CreateDirectory(subfolderPath);
                                 }
                                 string folderName = $"{DateTime.Now:yyyyMMdd}_{captureCount++}";
                                 string folderPath = System.IO.Path.Combine(subfolderPath, folderName);
@@ -188,11 +356,22 @@ namespace WPF_MachineService
                                         return;
                                     }
                                 }
+                                string imagePath = Path.Combine(folderPath, $"capture_{DateTime.Now:HHmmss}.png");
+                                capturedBitmap.Save(imagePath, System.Drawing.Imaging.ImageFormat.Png);
+                                UploadFilesToFirebase(folderPath);
+                                // Send captured image to Roboflow
+                                string detectionResult = await SendImageToRoboflowAsync(imagePath);
+                                if (detectionResult != null)
+                                {
+                                    // Process detection result (if needed)
+                                    // You can display the result, parse it, or do any further processing here
+                                    MessageBox.Show("Object detection result: " + detectionResult);
+                                }
                                 string fileName = $"capture_{DateTime.Now:HHmmss}.png";
 
                                 string filePath = System.IO.Path.Combine(folderPath, fileName);
                                 string filePathPython = System.IO.Path.Combine("C:\\ultralytics\\yolov8-silva\\inference\\images", fileName);
-                                LoadDetectionData();
+                                LoadDetectionData(detectionResult);
                                 try
                                 {
                                     capturedBitmap.Save(filePath, System.Drawing.Imaging.ImageFormat.Png);
@@ -226,9 +405,9 @@ namespace WPF_MachineService
 
         }
 
-        private async void LoadDetectionData()
+        private async void LoadDetectionData(string json)
         {
-            string detectjsonFilePath = @"D:\Materials\SWD\Code\ScanMachine_SWD\WPF_MachineService\WPF_MachineService\WPF_MachineService\Detection_results.json";
+            string detectjsonFilePath = @"D:\Materials\SWD\Code\Scan\Wpf_projects\WPF_MachineService\WPF_MachineService\Detection_results.json";
             Scanning messageBox = new Scanning();
             Window window = new Window
             {
@@ -241,47 +420,87 @@ namespace WPF_MachineService
             };
             window.Show();
             await Task.Delay(2000);
-            if (File.Exists(detectjsonFilePath))
-            {
-                List<Detection> productsFromJson;
-                using (StreamReader r = new StreamReader(detectjsonFilePath))
-                {
-                    string json = r.ReadToEnd();
-                    productsFromJson = JsonConvert.DeserializeObject<List<Detection>>(json);
-                }
-                Dictionary<string, int> productNameCounts = new Dictionary<string, int>();
-                foreach (var detection in productsFromJson)
-                {
-                    if (productNameCounts.ContainsKey(detection.name))
-                    {
-                        productNameCounts[detection.name]++;
-                    }
-                    else
-                    {
-                        productNameCounts[detection.name] = 1;
-                    }
-                }
-                List<Product> productsToDisplay = new List<Product>();
-                var allProductsFromDb = context.Products.ToList();
-                foreach (var productDb in allProductsFromDb)
-                {
-                    if (productNameCounts.ContainsKey(productDb.ProductName))
-                    {
-                        productDb.Quantity = productNameCounts[productDb.ProductName];
-                        productDb.Price = productDb.Quantity * productDb.Price;
-                        productsToDisplay.Add(productDb);
-                    };
-                }
+            //if (File.Exists(json))
+            //{
+            //    List<Detection> productsFromJson;
+            //    using (StreamReader r = new StreamReader(json))
+            //    {
+            //        string json12 = r.ReadToEnd();
+            //        productsFromJson = JsonConvert.DeserializeObject<List<Detection>>(json12);
+            //    }
+            //    Dictionary<string, int> productNameCounts = new Dictionary<string, int>();
+            //    foreach (var detection in productsFromJson)
+            //    {
+            //        if (productNameCounts.ContainsKey(detection.name))
+            //        {
+            //            productNameCounts[detection.name]++;
+            //        }
+            //        else
+            //        {
+            //            productNameCounts[detection.name] = 1;
+            //        }
+            //    }
+            //    List<Product> productsToDisplay = new List<Product>();
+            //    var allProductsFromDb = context.Products.ToList();
+            //    foreach (var productDb in allProductsFromDb)
+            //    {
+            //        if (productNameCounts.ContainsKey(productDb.ProductName))
+            //        {
+            //            productDb.Quantity = productNameCounts[productDb.ProductName];
+            //            productDb.Price = productDb.Quantity * productDb.Price;
 
-                lvListView.ItemsSource = productsToDisplay;
-                lvListView.DataContext = this;
-                CalculateTotalPrice();
-                IsScanning = false;
-            }
-            else
+            //            productsToDisplay.Add(productDb);
+            //        };
+            //    }
+
+            //    lvListView.ItemsSource = productsToDisplay;
+            //    lvListView.DataContext = this;
+            //    CalculateTotalPrice();
+            //    IsScanning = false;
+            //}
+            //else
+            //{
+            //    MessageBox.Show("File not found: " + json);
+            //}
+            //window.Close();
+
+
+            List<Product> productsToDisplay = new List<Product>();
+
+            // Đọc giá trị class từ dữ liệu JSON
+            JObject jsonObject = JObject.Parse(json);
+            JArray predictions = (JArray)jsonObject["predictions"];
+            foreach (var prediction in predictions)
             {
-                MessageBox.Show("File not found: " + detectjsonFilePath);
+                string className = (string)prediction["class"];
+
+                // Truy vấn cơ sở dữ liệu để lấy danh sách sản phẩm có tên phù hợp
+                var productsInDB = context.Products.Where(p => p.ProductName == className).ToList();
+
+                // Kiểm tra xem có sản phẩm nào phù hợp không
+                if (productsInDB.Any())
+                {
+                    // Lặp qua các sản phẩm trong danh sách từ DB để thêm vào danh sách hiển thị
+                    foreach (var productDb in productsInDB)
+                    {
+                        productDb.Quantity = 1; // Đặt quantity thành 1
+                        productsToDisplay.Add(productDb);
+                    }
+                }
+                else
+                {
+                    // Hiển thị thông báo nếu không có sản phẩm phù hợp
+                    MessageBox.Show("No product found in the database matching the class: " + className);
+                }
             }
+
+            // Thiết lập dữ liệu cho ListView và tính tổng giá
+            lvListView.ItemsSource = productsToDisplay;
+            lvListView.DataContext = this;
+            CalculateTotalPrice();
+            IsScanning = false;
+
+            // Đóng cửa sổ
             window.Close();
         }
         private void CalculateTotalPrice()
@@ -303,7 +522,7 @@ namespace WPF_MachineService
         }
         private async void btPayment(object sender, RoutedEventArgs e)
         {
-            string Phone = "0708125538";
+            string Phone = "0708124438";
             string Name = "Nguyễn Gia Đạt";
             string Email = "dat36226@gmail.com";
             string PayNumber = tbSumTotal.Text.Trim();
@@ -391,7 +610,7 @@ namespace WPF_MachineService
             {
                 Models.Order newOrder = new Models.Order
                 {
-                    PaymentId = 1,
+
                     Total = Convert.ToDouble(tbSumTotal.Text),
                     Quantity = 1,
                     DateCreated = DateTime.Now,
